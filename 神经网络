@@ -1,0 +1,395 @@
+## pip安装
+
+```
+pip install tensorboard -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+```
+
+## 1 神经网络
+
+
+
+### 1.1 神经网络的基本骨架nn-Module
+
+
+nn.Module：继承了module这个类
+
+里面的两个函数：
+
+
+
+init：初始化
+
+super....调用父类的这个初始化函数
+
+forward函数：
+
+神经网络的一个运算步骤，就是经历了这样的一个神经网络的forward函数
+
+
+
+
+比如我们输入的是x
+
+先self.conv1：经过一次卷积，在经过一次非线性的处理(F.relu())
+
+返回的值再次经历一次卷积和非线性处理
+
+
+
+我们写一个例子
+
+```python
+import torch
+from torch import nn
+class Tudui(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self,input):
+        output = input+1
+        return output
+
+    #以上就是一个简单的神经网络的一个模板
+
+tudui =Tudui()
+#自定义赋值
+x = torch.tensor(1.0)
+
+output=tudui(x)
+print(output)
+```
+
+输出
+
+```python
+tensor(2.)
+```
+
+
+
+### 1.2 卷积
+
+
+
+
+
+上图为卷积的计算方式
+
+中间的卷积核可以看作forward函数
+
+卷积的计算方式如图所示
+
+
+
+
+
+
+1x1+2x2+0x1+0x2+1x1+2x0+1x2+2x1+1x0 = 10
+
+然后将这个3x3的卷积核向右移动一个单位（为什么是移动一个单位呢：因为这里的stride代表的就是移动的单位）
+
+当此时向右移动两个单位后不能移动了（到头了），此时应该回归起始位置，然后开始纵向移动。
+
+
+
+同样的，我们写一个程序来看一下
+
+```python
+import torch
+import torch.nn.functional as F
+input = torch.tensor([[1,2,0,3,1],
+                      [0,1,2,3,1],
+                      [1,2,1,0,0],
+                      [5,2,3,1,1],
+                      [2,1,0,1,1]])
+kernel = torch.tensor([[1,2,1],
+                       [0,1,0],
+                       [2,1,0]])
+#我们需要的数据的格式是四个参数的，上面的是5行5列和3行3列，只有两个参数，明显不符合我们需要的格式
+#我们使用下面的reshape来改变，转换成我们需要的格式
+input = torch.reshape(input,(1,1,5,5))
+kernel = torch.reshape(kernel,(1,1,3,3))
+print(input.shape)
+print(kernel.shape)
+
+output = F.conv2d(input,kernel,stride=1)
+print(output)
+```
+
+
+
+输出
+
+```python
+tensor([[[[10, 12, 12],
+          [18, 16, 16],
+          [13,  9,  3]]]])
+```
+
+对照上面我们自己的计算，结果是一模一样的
+
+
+
+同样的，我们看一下stride为2的时候的值
+
+
+
+
+
+我们继续看下一个参数
+
+padding
+
+当padding为1时
+
+
+相当于input的数据四周扩大了一格
+
+对于计算过程，和没有加padding的计算相比较，方法是一样的
+
+
+
+
+
+
+我们只看一下第一行的输出结果
+
+
+
+
+我们通过代码来看一下
+
+
+
+输出结果的第一行和我们手动计算的一样
+
+对比第三个和最后一个数据可以明显的看到差别.
+
+如果还是不太理解这个的计算过程，可以看下面的链接地址
+
+https://github.com/vdumoulin/conv_arithmetic
+
+### 1.3 卷积层
+
+先来解释参数
+
+in_channel = 1
+
+即只有一个输入数据（一个输入张量）
+
+out_channel = 1
+
+即只有一个输入张量
+
+当out_channel = 2时，表示有两个卷积后的输出，此时会生成两个卷积核来分别进行计算流程，得到两个输出结果
+
+
+
+
+我们通过代码来实现一下
+
+```python
+import torch
+import torchvision
+from torch import nn
+from torch.nn import Conv2d
+from torch.utils.data import DataLoader
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+#运行后会自动下载数据集
+dataset = torchvision.datasets.CIFAR10("./data",train=False,transform=torchvision.transforms.ToTensor(),
+                                       download=True)
+
+dataset = torchvision.datasets
+dataloader = DataLoader(dataset,batch_size=64)
+
+#现在搭建神经网络
+
+class Tudui(nn.Module):
+    def __init__(self):
+        super(Tudui,self).__init__()
+        self.conv1 = Conv2d(3,6,3,stride=1,padding=0)
+        #现在我们就有了一个卷积层
+
+    def forward(self,x):
+        x = self.conv1(x)
+        return x
+
+#现在我们来初始化这个网络
+tudui = Tudui()
+print(tudui)
+
+```
+
+如下图是训练集中的数据
+
+（首先运行代码，然后下面的终端直接输入`tensorboard --logdir=logs`）
+
+
+我们通过程序下载到数据集后，对数据进行卷积操作可以得到如下的数据
+
+
+上面的原始数据是64个的，下面得到的是128个的
+
+我们可以看实现的代码，
+
+
+输出通道为输入通道的两倍，所以是x2
+
+### 1.4 （池化层）最大池化的使用
+
+
+
+
+
+上图中有四个红色的框，里面都包含六个单位，但除了第一个里面六个单位都是有元素的之外，其余三个都或多或少缺失几个元素。
+
+最大池化操作的计算是:池化核（kernel_size）对输入图像进行比对，找出最大的一个元素值作为输出
+
+* 左上角的框中最大值为2
+* 右上角的最大值为3
+* 左下角的最大值为5
+* 右下角的最大值为1
+
+最大池化操作中有一个ceil_model属性
+
+当`ceil_model=true`时，从单元格获取到的最大值全部保存
+
+
+当`ceil_model=false`时，不完整的单元格中获取到的最大值不保存
+
+
+实现代码：
+
+```python
+import torch
+from torch import nn
+from torch.nn import MaxPool2d
+
+input = torch.tensor([[1,2,0,3,1],
+                      [0,1,2,3,1],
+                      [1,2,1,0,0],
+                      [5,2,3,1,1],
+                      [2,1,0,1,1]],dtype=torch.float32)
+input = torch.reshape(input,[-1,1,5,5])
+
+print(input.shape)
+
+
+class Tudui(nn.Module):
+    def __init__(self):
+        super(Tudui,self).__init__()
+        self.maxpool1 = MaxPool2d(kernel_size=3,ceil_mode=False)
+
+    def forward(self,input):
+        output= self.maxpool1(input)
+        return output
+
+tudui = Tudui()
+output =tudui(input)
+print(output)
+```
+
+最大池化的目的就是保留输入的一个特征，同时把数据量减少。
+
+对于一个网络来说他进行计算的参数变少了，训练的更快。
+
+相当于看我们视频，1080p和720p的视频就相当于进行了一次池化操作。
+
+
+
+
+
+
+
+### 1.5 非线性激活
+
+
+
+
+
+当输入数值为负数时，ReLU将会在0处进行截断，
+
+给出实现代码
+
+```python
+import torch
+from torch import nn
+from torch.nn import ReLU
+
+input = torch.tensor([[1,-0.5],
+                      [-1,3]])
+
+input = torch.reshape(input,[-1,1,2,2])
+print(input)
+
+class Tudui(nn.Module):
+    def __init__(self):
+        super(Tudui,self).__init__()
+        self.relu1 = ReLU()
+    def forward(self,input):
+        output = self.relu1(input)
+        return output
+
+tudui = Tudui()
+output = tudui(input)
+print(output)
+
+```
+
+输出结果
+
+
+
+
+输出结果将input小于0的张量值在0处截断。
+
+
+
+这对图像有什么效果？
+
+```python
+import torch
+import torchvision.datasets
+from torch import nn
+from torch.nn import ReLU, Sigmoid
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+input = torch.tensor([[1,-0.5],
+                      [-1,3]])
+
+input = torch.reshape(input,[-1,1,2,2])
+print(input)
+dataset = torchvision.datasets.CIFAR10("./data",train=False,download=True,transform=torchvision.transforms.ToTensor())
+dataloader = DataLoader(dataset,batch_size=64)
+
+class Tudui(nn.Module):
+    def __init__(self):
+        super(Tudui,self).__init__()
+        self.relu1 = ReLU()
+        self.sigmoid1 = Sigmoid()
+    def forward(self,input):
+        output = self.sigmoid1(input)
+        return output
+writer = SummaryWriter("./logs_relu")
+step = 0
+tudui = Tudui()
+# output = tudui(input)
+# print(output)
+for data in dataloader:
+    imgs,targets = data
+    writer.add_images("input",imgs,global_step=step)
+    output = tudui(imgs)
+    writer.add_images("output",output,step)
+    step+=1
+
+writer.close()
+```
+
+
+非线性变化的主要目的是在网络中引入一些非线性特征，非线性越多的话，才能训练出符合各种曲线或者特征的模型，提高模型的泛化能力。
+
+### 1.6线性层及其其他层介绍
+
+
